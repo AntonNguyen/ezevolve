@@ -1,0 +1,497 @@
+<html>
+	<head>
+		<title>Easy Evolve</title>
+		<link rel="stylesheet" href="css/reset.css" type="text/css" />
+		<link rel="stylesheet" href="css/style.css" type="text/css" />
+		<link rel="stylesheet" href="css/shCore.css" type="text/css" />
+		<link rel="stylesheet" href="css/shThemeDefault.css" type="text/css" />
+		<script type="text/javascript" src="js/jquery.js"></script>
+		<script type="text/javascript" src="js/jquery.hotkeys-0.7.9.min.js"></script>
+		<script type="text/javascript" src="js/shCore.js"></script>
+		<script type="text/javascript" src="js/shBrushJScript.js"></script>
+		<script type="text/javascript" src="js/definition.json"></script>
+		<script type="text/javascript">
+
+			$(document).ready(function() {
+				SyntaxHighlighter.highlight();
+				loadData();
+				updateCode();
+				verbHider();
+
+				$('input').live('change', function() {
+					saveData();
+					updateCode();
+				});
+
+				$('input:radio[name="verb"]').live('change', function() {
+					verbHider();
+				});
+
+				$('input').live("keyup", function() {
+					saveData();
+					updateCode();
+				});
+
+				$('textarea').live("keyup", function() {
+					saveData();
+					updateCode();
+				});
+
+				$('#sendRequest').click(function() {
+					makeServerRequest();
+					return false;
+				});
+
+				$('#addSearch').click(function() {
+					$('#search').append('<div class="pair"><input type="text" class="key" placeholder="Key"/><input type="text" class="value" placeholder="Value"/></div>');
+					return false;
+				});
+
+				$('#boxclose').click(function(){
+					hideBox();
+				});
+
+				$(document).bind('keydown', 'alt+ctrl+return', makeServerRequest);
+				$(document).bind('keydown', 'esc', hideBox);
+			});
+
+			function loadData() {
+				if (localStorage.isInitialized) {
+					$('#' + localStorage.environment).attr("checked", true);
+					$('#systemid').val(localStorage.systemid);
+					$('#userid').val(localStorage.userid);
+					$('#contactid').val(localStorage.contactid);
+					$('#' + localStorage.level).attr("checked", true);
+				} else {
+					localStorage.isInitialized = true;
+					localStorage.environment = "dev";
+					localStorage.level = "super";
+					loadData();
+				}
+			}
+
+			function saveData() {
+				localStorage.environment = getLocation();
+				localStorage.systemid = $('#systemid').val();
+				localStorage.userid = $('#userid').val();
+				localStorage.contactid = $('#contactid').val();
+				localStorage.level = $("input:radio[name=level]:checked").attr("id");
+			}
+
+			function makeServerRequest() {
+				var xhr = new XMLHttpRequest();
+				xhr.open(getVerb(), buildURL(), true, getUser(), getPassword());
+				xhr.setRequestHeader('content-type', "application/json'");
+
+				xhr.onreadystatechange = function(xhr) {
+					if (xhr.target.readyState==4 && xhr.target.status==200) {
+						var json = xhr.target.responseText;
+
+						var location = getLocation();
+						if (location !== "dev") {
+							json = formatJson(json);
+						}
+
+						displayCode('response', json);
+						$('#response').show();
+						$('#loader').hide();
+					}
+
+					if (xhr.target.readyState==4 && xhr.target.status!=200) {
+						var $frame = $('<iframe>');
+						$('#box').append( $frame );
+						setTimeout( function() {
+							var doc = $frame[0].contentWindow.document;
+							var $body = $('body', doc);
+							$body.html(xhr.target.responseText);
+						}, 1 );
+
+						$('#errors').html(xhr.target.responseText);
+						$('#overlay').fadeIn('fast',function(){
+							$('#box').show();
+							$('#box').animate({'top':'10px'},500);
+						});
+
+						displayCode('response', "Request Failed. Status: " + xhr.target.status);
+						$('#response').show();
+						$('#loader').hide();
+					}
+				};
+
+				$('#response').hide();
+				$('#loader').show();
+
+				var payload = getPayload();
+				if (payload !== "") {
+					xhr.send(payload);
+				} else {
+					xhr.send();
+				}
+			}
+
+			function verbHider() {
+				var verb = $('input:radio[name="verb"]:checked').val();
+				if (verb === "get") {
+					$('.modifying').hide();
+					$('#payload').val("");
+					$('#request').hide();
+					$('.getting').show();
+				} else if (verb === "post" || verb === "put") {
+					$('.modifying').show();
+					$('.getting').hide();
+					$('#request').show();
+					$('.getting input').val("");
+				} else if (verb === "delete") {
+					$('.modifying').hide();
+					$('.getting').hide();
+					$('#request').hide();
+					$('#payload').val("");
+					$('.getting input').val("");
+				}
+				updateCode();
+			}
+
+			function getServiceURL() {
+				var url = "";
+				var service = $('#service').val();
+				var resource = $('#resource').val();
+				var endpoint = $('#endpoint').val();
+
+				if (service !== "" && resource !== "") {
+					url += "/" + service + "/" + resource;
+				}
+
+				if (endpoint !== "") {
+					url += "/" + endpoint;
+				}
+
+				return url;
+			}
+
+			function buildURL() {
+				var url = getEvolve();
+
+				var service = getServiceURL();
+				if (service !== "") {
+					url += service;
+
+					var params = getQueryParams();
+					if (params !== "") {
+						url += "?" + params;
+					}
+				}
+
+				return url;
+			}
+
+			function getQueryParams() {
+				var url = "";
+				var params = new Array();
+
+				// Includes are comma seperated
+				var includes = $('#include').val();
+				var include = "";
+				includes = includes.split(",");
+				for (var i = 0; i < includes.length; i++) {
+					include = $.trim(includes[i]);
+					if (include !== "") {
+						params.push("include%5B%5D=" + include);
+					}
+				}
+
+				// Look for all the search params
+				var searches = $('#search .pair');
+				var key = "";
+				var value = "";
+				for (var i = 0; i < searches.length; i++) {
+					key = $(searches[i]).find(".key").val();
+					value = $(searches[i]).find(".value").val();
+
+					if (key !== "" && value !== "") {
+						params.push("search%5B" + key + "%5D=" + value);
+					}
+				}
+
+				// Add pagination
+				var page = $('#page').val();
+				if (page !== "") {
+					params.push("page=" + page);
+				}
+				var per_page = $('#per_page').val();
+				if (per_page !== "") {
+					params.push("per_page=" + per_page);
+				}
+
+				// Add the sort
+				var sort = $('#sort').val();
+				if (sort !== "") {
+					params.push("sort=" + sort);
+				}
+
+				if (params.length > 0) {
+					url = params.join("&");
+				}
+
+				return url;
+			}
+
+			function updateCode() {
+				var authorization = getUser() + ":" + getPassword();
+				$('#auth').html(authorization);
+
+				var url = buildURL();
+				$('#url').html(url);
+
+				var verb = getVerb();
+				if (verb !== "get" && verb !== "delete") {
+					var payload = getPayload();
+					displayCode('request', formatJson(payload));
+				}
+			}
+
+			function query() {
+				var command = "";
+				var verb = "";
+				// command += "curl -X " + verb + 
+			}
+
+			function getLocation() {
+				return $("input:radio[name=location]:checked").val();
+			}
+
+			function getPayload() {
+				return $('#payload').val();
+			}
+
+			function getVerb() {
+				return $("input:radio[name=verb]:checked").val();
+			}
+
+			function getEvolve() {
+				var location = getLocation();
+				if (location === "dev") {
+					return "http://freshbooksdev.com:5000";
+				} else if (location === "trunk") {
+					return "http://optimus:5432";
+				} else if (location === "rc") {
+					return "http://optimus:5431";
+				} else if (location === "last") {
+					return "http://optimus:5430";
+				}
+
+				return "";
+			}
+
+			function getUser() {
+				var systemid = $('#systemid').val();
+				var userid = $('#userid').val();
+				var contactid = $('#contactid').val();
+				var level = getLevel();
+
+				var user = "";
+				user += systemid + ",";
+				user += userid + ",";
+				user += contactid + ",";
+				user += level;
+				return user;
+			}
+
+			function getPassword() {
+				var location = getLocation();
+				if (location === "dev") {
+					return "sekret";
+				} else if (location === "trunk") {
+					return "sekret";
+				} else if (location === "rc") {
+					return "sekret-rc";
+				} else if (location === "last") {
+					return "sekret-last-release";
+				}
+
+				return "";
+			}
+
+			function getLevel() {
+				return $("input:radio[name=level]:checked").val();
+			}
+
+			function displayCode(sectionID, code) {
+				var sectionJQ = "#" + sectionID;
+				var parent = $(sectionJQ).parent();
+
+				$(sectionJQ).remove();
+				$(parent).append('<pre id="' + sectionID + '" class="brush: js; toolbar: false; auto-links:false;"></pre>');
+				$(sectionJQ).append(code);
+
+				SyntaxHighlighter.highlight();
+			}
+
+			function formatJson(val) {
+				var retval = '';
+				var str = val;
+				var pos = 0;
+				var strLen = str.length;
+				var indentStr = '&nbsp;&nbsp;&nbsp;&nbsp;';
+				var newLine = '\n';
+				var char = '';
+
+				for (var i=0; i<strLen; i++) {
+					char = str.substring(i,i+1);
+
+					if (char == '}' || char == ']') {
+						retval = retval + newLine;
+						pos = pos - 1;
+
+						for (var j=0; j<pos; j++) {
+							retval = retval + indentStr;
+						}
+					}
+
+					retval = retval + char;
+
+					if (char == '{' || char == '[' || char == ',') {
+						retval = retval + newLine;
+
+						if (char == '{' || char == '[') {
+							pos = pos + 1;
+						}
+
+						for (var k=0; k<pos; k++) {
+							retval = retval + indentStr;
+						}
+					}
+				}
+
+				return retval;
+			}
+
+			function hideBox() {
+				$('#box').animate({'top':'-100px'},500,function(){
+					$('#overlay').fadeOut('fast');
+				});
+				$('#box').hide();
+				$('#box iframe').remove();
+			}
+		</script>
+	</head>
+	<body>
+		<h1>Easy Evolve</h1>
+
+		<div id="sidebar">
+			<div class="input_grouping">
+				<h2>1) What's the URL?</h2>
+				<hr/>
+				<input type="text" id="service" placeholder="Service"/>
+				<input type="text" id="resource" placeholder="Resource"/>
+				<input type="text" id="endpoint" placeholder="Endpoint"/>
+			</div>
+
+			<div class="input_grouping">
+				<h2>2) What do you want to do?</h2>
+				<hr/>
+				<input id="get" type="radio" name="verb" value="get" checked/><label for="get">GET</label>
+				<input id="post" type="radio" name="verb" value="post"/><label for="post">POST</label>
+				<input id="put" type="radio" name="verb" value="put"/><label for="put">PUT</label>
+				<input id="delete" type="radio" name="verb" value="delete"/><label for="delete">DELETE</label>
+			</div>
+
+			<div class="input_grouping getting">
+				<h2>3) Anything to include?</h2>
+				<hr/>
+				<input type="text" id="include" placeholder="Comma-separated Includes"/>
+			</div>
+
+			<div class="input_grouping getting">
+				<h2>4) Anything to search?</h2>
+				<hr/>
+				<div id="search">
+					<a href="#" id="addSearch">Add Searches</a>
+					<div class="pair">
+						<input type="text" class="key" placeholder="Key"/>
+						<input type="text" class="value" placeholder="Value"/>
+					</div>
+				</div>
+			</div>
+
+			<div class="input_grouping getting">
+				<h2>5) Is there pagination?</h2>
+				<hr/>
+				<input type="text" id="page" placeholder="Page"/>
+				<input type="text" id="per_page" placeholder="Per Page"/>
+			</div>
+
+			<div class="input_grouping getting">
+				<h2>6) How should it be sorted?</h2>
+				<hr/>
+				<input type="text" id="sort" placeholder="Sort Key"/>
+			</div>
+
+			<div class="input_grouping modifying">
+				<h2>3) What's the Payload?</h2>
+				<hr/>
+				<textarea id="payload"></textarea>
+			</div>
+		</div>
+
+		<div id="content">
+			<div class="input_grouping">
+				<h2>Environment</h2>
+				<hr/>
+				<div id="location" class="credentials">
+					<input id="dev" type="radio" name="location" value="dev"/><label for="dev">Dev Image</label>
+					<input id="trunk" type="radio" name="location" value="trunk"/><label for="trunk">Trunk</label>
+					<input id="rc" type="radio" name="location" value="rc"/><label for="rc">RC</label>
+					<input id="last" type="radio" name="location" value="last"/><label for="last">Last-Release</label>
+				</div>
+				<div class="clearfix"></div>
+			</div>
+
+			<div id="userDetails" class="requestInfo input_grouping">
+				<h2>Credentials</h2>
+				<hr/>
+				<div id="credentials" class="credentials">
+					<input type="text" id="systemid" placeholder="SystemID"/>
+					<input type="text" id="userid" placeholder="UserID"/>
+					<input type="text" id="contactid" placeholder="ContactID"/>
+				</div>
+				<div class="clearfix"></div>
+
+				<div id="level" class="credentials">
+					<h3>Level</h3>
+					<input id="super" type="radio" name="level" value="6"/><label for="super">Super Admin</label>
+					<input id="admin" type="radio" name="level" value="3"/><label for="admin">Admin</label>
+					<input id="staff" type="radio" name="level" value="1"/><label for="staff">Staff</label>
+					<input id="client" type="radio" name="level" value="0"/><label for="client">Client</label>
+					<input id="contractor" type="radio" name="level" value="-3"/><label for="contractor">Contractor</label>
+					<input id="nobody" type="radio" name="level" value="99"/><label for="nobody">Nobody</label>
+				</div>
+				<div class="clearfix"></div>
+			</div>
+
+			<div class="requestInfo input_grouping">
+				<h2>Request</h2>
+				<hr/>
+				<pre id="auth">&nbsp;</pre>
+				<pre id="url">&nbsp;</pre>
+				<div>
+					<pre id="request" class="brush: js; toolbar: false; auto-links:false;"></pre>
+				</div>
+				<a href="#" id="sendRequest" accesskey="S">Send Request</a>
+			</div>
+
+			<div class="requestInfo input_grouping">
+				<h2>Response</h2>
+				<hr/>
+				<div id="loader">
+					<img src="media/ajax-loader.gif"/><br/>
+					<p>Shhh! I&apos;m thinking!</p>
+				</div>
+				<pre id="response" class="brush: js; toolbar: false; auto-links:false;"></pre>
+			</div>
+		</div>
+		<div id="overlay" class="overlay" style="display:none"></div>
+		<div id="box" class="box">
+			<a class="boxclose" id="boxclose"></a>
+		</div>
+	</body>
+</html>

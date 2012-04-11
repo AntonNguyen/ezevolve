@@ -1,0 +1,16 @@
+{
+	"name": "Easy Evolve",
+	"version": "1.1",
+	"description": "Easily interact and experiment with the Evolve!",
+	"icons": {"16": "media/icon.png", "48": "media/icon.png", "128": "media/icon.png"},
+	"permissions": ["http://freshbooksdev.com:5000/*",
+					"http://optimus:5432/*",
+					"http://optimus:5431/*",
+					"http://optimus:5430/*"],
+	"browser_action": {
+		"default_title": "FreshBooks",
+		"default_icon": "media/icon.png",
+		"popup": "popup.html"
+	},
+	"update_url": "http://afn85.webfactional.com/evolve.xml"
+}
