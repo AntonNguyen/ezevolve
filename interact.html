@@ -44,6 +44,7 @@
 
 				$('#addSearch').click(function() {
 					$('#search').append('<div class="pair"><input type="text" class="key" placeholder="Key"/><input type="text" class="value" placeholder="Value"/></div>');
+					$('input.key:last').focus();
 					return false;
 				});
 
