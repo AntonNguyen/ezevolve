@@ -9,6 +9,7 @@
 		<script type="text/javascript" src="js/jquery.hotkeys-0.7.9.min.js"></script>
 		<script type="text/javascript" src="js/shCore.js"></script>
 		<script type="text/javascript" src="js/shBrushJScript.js"></script>
+		<script type="text/javascript" src="js/Encoder.js"></script>
 		<script type="text/javascript" src="js/definition.json"></script>
 		<script type="text/javascript">
 
@@ -237,10 +238,14 @@
 			}
 
 			function updateCode() {
+				Encoder.EncodeType = "entity";
+
 				var authorization = getUser() + ":" + getPassword();
+				authorization = Encoder.htmlEncode(authorization);
 				$('#auth').html(authorization);
 
 				var url = buildURL();
+				url = Encoder.htmlEncode(url);
 				$('#url').html(url);
 
 				var verb = getVerb();
