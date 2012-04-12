@@ -215,6 +215,7 @@
 
 				// Look for all the search params
 				var searches = $('#search .pair');
+				var found_matches = {};
 				var key = "";
 				var value = "";
 				for (var i = 0; i < searches.length; i++) {
@@ -222,7 +223,20 @@
 					value = $(searches[i]).find(".value").val();
 
 					if (key !== "" && value !== "") {
-						params.push("search%5B" + key + "%5D=" + value);
+						if (found_matches[key] == null) {
+							found_matches[key] = new Array();
+						}
+						found_matches[key].push(value);
+					}
+				}
+
+				for (var search_key in found_matches) {
+					if (found_matches[search_key].length > 1) {
+						for (var k = 0; k < found_matches[search_key].length; k++) {
+							params.push("search%5B" + search_key + "%5D%5B%5D=" + found_matches[search_key][k]);
+						}
+					} else {
+						params.push("search%5B" + search_key + "%5D=" + found_matches[search_key][0]);
 					}
 				}
 
