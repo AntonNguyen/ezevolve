@@ -82,7 +82,9 @@
 
 			function makeServerRequest() {
 				var xhr = new XMLHttpRequest();
-				xhr.open(getVerb(), buildURL(), true, getUser(), getPassword());
+				var verb = getVerb();
+
+				xhr.open(verb, buildURL(), true, getUser(), getPassword());
 				xhr.setRequestHeader('content-type', "application/json'");
 
 				xhr.onreadystatechange = function(xhr) {
@@ -95,8 +97,6 @@
 						}
 
 						displayCode('response', json);
-						$('#response').show();
-						$('#loader').hide();
 					}
 
 					if (xhr.target.readyState==4 && xhr.target.status!=200) {
@@ -115,13 +115,13 @@
 						});
 
 						displayCode('response', "Request Failed. Status: " + xhr.target.status);
-						$('#response').show();
-						$('#loader').hide();
 					}
+
+					$('#response').show();
+					$('#loader').hide();
 				};
 
-				$('#response').hide();
-				$('#loader').show();
+				
 
 				var payload = getPayload();
 				if (payload !== "") {
@@ -153,11 +153,23 @@
 				updateCode();
 			}
 
+			function getService() {
+				return $('#service').val();
+			}
+
+			function getResource() {
+				return $('#resource').val();
+			}
+
+			function getEndpoint() {
+				return $('#endpoint').val();
+			}
+
 			function getServiceURL() {
 				var url = "";
-				var service = $('#service').val();
-				var resource = $('#resource').val();
-				var endpoint = $('#endpoint').val();
+				var service = getService();
+				var resource = getResource();
+				var endpoint = getEndpoint();
 
 				if (service !== "" && resource !== "") {
 					url += "/" + service + "/" + resource;
